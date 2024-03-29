@@ -1,0 +1,7 @@
+<resources>
+    <dimen name="small_margin">5dp</dimen>
+    <dimen name="medium_margin">10dp</dimen>
+    <dimen name="big_margin">15dp</dimen>
+    <dimen name="media_buttons_height">52dip</dimen>
+    <dimen name="media_buttons_width">71dip</dimen>
+</resources>

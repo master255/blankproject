@@ -1,0 +1,9 @@
+<resources>
+
+    <style name="Theme.BlankProject" parent="Theme.AppCompat.DayNight.DarkActionBar">
+        <item name="android:windowBackground">@color/brunswick_blue</item>
+        <item name="colorPrimary">@color/purple_200</item>
+        <item name="colorPrimaryDark">@color/brunswick_blue_pressed</item>
+        <item name="colorAccent">@color/summer_sky</item>
+    </style>
+</resources>
