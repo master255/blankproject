@@ -7,7 +7,6 @@ import java.io.File;
 import java.io.RandomAccessFile;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.List;
 
 public class DiskStoredArrayList<T> extends ArrayList<T> {
 
@@ -23,19 +22,12 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
         final File cacheFolderFile = new File(cacheFolderPath);
         if (!cacheFolderFile.exists()) cacheFolderFile.mkdirs();
         try {
-            this.cacheFile = new RandomAccessFile(cacheFilePath, "rwd");
-            this.cacheIndexFile = new RandomAccessFile(cacheIndexFilePath, "rwd");
+            cacheFile = new RandomAccessFile(cacheFilePath, "rwd");
+            cacheIndexFile = new RandomAccessFile(cacheIndexFilePath, "rwd");
             if (cacheIndexFile.length() > 0) {
-                final byte[] buf = new byte[Constants.FILE_BUFFER_LENGTH];
-                int bytesRead;
-                final CustomByteArrayOutputStream byteArrayOutputStream = new CustomByteArrayOutputStream(0);
-                try {
-                    while ((bytesRead = cacheIndexFile.read(buf)) != -1)
-                        byteArrayOutputStream.write(buf, 0, bytesRead);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-                final ArrayList<MapEntry> mapEntryArrayList = (ArrayList<MapEntry>) ObjectHelper.convertFromBytes(byteArrayOutputStream.getData(), null);
+                final byte[] buf = new byte[(int) cacheIndexFile.length()];
+                cacheIndexFile.readFully(buf);
+                final ArrayList<MapEntry> mapEntryArrayList = (ArrayList<MapEntry>) ObjectHelper.convertFromBytes(buf, null);
                 if (mapEntryArrayList != null)
                     mapEntries.addAll(mapEntryArrayList);
             }
@@ -71,25 +63,11 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
         final T object = entryCaches.search(index);
         if (object != null) return object;
         final MapEntry mapEntry = mapEntries.get(index);
-        final byte[] buf = new byte[10240];
-        int bytesRead;
-        final CustomByteArrayOutputStream byteArrayOutputStream = new CustomByteArrayOutputStream(0);
         try {
             cacheFile.seek(mapEntry.getStartByte());
-            int allBytes = mapEntry.getLength();
-            while ((bytesRead = cacheFile.read(buf)) != -1) {
-                allBytes -= bytesRead;
-                if (allBytes > 0)
-                    byteArrayOutputStream.write(buf, 0, bytesRead);
-                else if (allBytes == 0) {
-                    byteArrayOutputStream.write(buf, 0, bytesRead);
-                    break;
-                } else {
-                    byteArrayOutputStream.write(buf, 0, (bytesRead + allBytes));
-                    break;
-                }
-            }
-            final T entry = (T) ObjectHelper.convertFromBytes(byteArrayOutputStream.getData(), null);
+            final byte[] buf = new byte[mapEntry.getLength()];
+            cacheFile.readFully(buf);
+            final T entry = (T) ObjectHelper.convertFromBytes(buf, null);
             if (entry != null) {
                 entryCaches.add(new EntryCache(index, entry));
                 if (entryCaches.size() > bufferSize) entryCaches.remove(0);
@@ -101,9 +79,31 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
         }
     }
 
-    @Override
-    public List<T> subList(int fromIndex, int toIndex) {
-        throw new UnsupportedOperationException("Sublist not supported");
+
+    public ArrayList<T> subList(int fromIndex, int toIndex) {
+        final ArrayList<T> result = new ArrayList<>();
+        if (toIndex > mapEntries.size()) toIndex = mapEntries.size();
+        for (int i = fromIndex; i < toIndex; i++) {
+            final T object = entryCaches.search(i);
+            if (object != null) {
+                result.add(object);
+                continue;
+            }
+            final MapEntry mapEntry = mapEntries.get(i);
+            try {
+                cacheFile.seek(mapEntry.getStartByte());
+                final byte[] buf = new byte[mapEntry.getLength()];
+                cacheFile.readFully(buf);
+                final T entry = (T) ObjectHelper.convertFromBytes(buf, null);
+                if (entry != null)
+                    result.add(entry);
+                else return null;
+            } catch (Exception e) {
+                e.printStackTrace();
+                return null;
+            }
+        }
+        return result;
     }
 
     @Override
@@ -112,7 +112,7 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
     }
 
     @Override
-    public T remove(int index) {//not tested
+    public T remove(int index) {
         final MapEntry mapEntry = mapEntries.remove(index);
         if (mapEntry == null) return null;
         try {
@@ -151,7 +151,6 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
 
     @Override
     public void clear() {
-        super.clear();
         mapEntries.clear();
         try {
             cacheFile.setLength(0);
@@ -166,6 +165,17 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
             cacheFile.close();
             cacheIndexFile.setLength(0);
             cacheIndexFile.write(ObjectHelper.convertToBytes(mapEntries));
+            cacheIndexFile.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void clearClose() {
+        mapEntries.clear();
+        entryCaches.clear();
+        try {
+            cacheFile.close();
             cacheIndexFile.close();
         } catch (Exception e) {
             e.printStackTrace();
