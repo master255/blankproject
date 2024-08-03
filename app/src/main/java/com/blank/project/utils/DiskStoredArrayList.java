@@ -1,5 +1,7 @@
 package com.blank.project.utils;
 
+import androidx.annotation.NonNull;
+
 import com.blank.project.Constants;
 import com.blank.project.models.MapEntry;
 
@@ -58,6 +60,27 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
             }
             return true;
         }
+    }
+
+    public boolean addAllElements(@NonNull ArrayList<? extends T> c) {
+        synchronized (this) {
+            for (int i = 0; i < c.size(); i++) {
+                final T element = c.get(i);
+                try {
+                    final long length = cacheFile.length();
+                    final byte[] bytes = ObjectHelper.convertToBytes((Serializable) element);
+                    cacheFile.seek(length);
+                    cacheFile.write(bytes);
+                    entryCaches.add(new EntryCache(mapEntries.size(), element));
+                    if (entryCaches.size() > bufferSize) entryCaches.remove(0);
+                    mapEntries.add(new MapEntry(length, bytes.length));
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     @Override
