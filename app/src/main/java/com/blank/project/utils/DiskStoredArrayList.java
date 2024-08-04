@@ -264,6 +264,18 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
         }
     }
 
+    public int sizeArrayList() {
+        return super.size();
+    }
+
+    public boolean addArrayList(T element) {
+        return super.add(element);
+    }
+
+    public T getArrayList(int index) {
+        return super.get(index);
+    }
+
     class EntryCaches extends ArrayList<EntryCache> {
         public T search(int index) {
             for (int i = size() - 1; i > -1; i--) {
