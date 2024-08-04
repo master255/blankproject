@@ -136,8 +136,17 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
     }
 
     @Override
-    public boolean remove(Object o) {
-        throw new UnsupportedOperationException("Removing is not supported");
+    public boolean remove(Object element) {
+        synchronized (this) {
+            for (int i = 0; i < mapEntries.size(); i++) {
+                final T elementLocal = get(i);
+                if (element.equals(elementLocal)) {
+                    remove(i);
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     @Override
