@@ -13,10 +13,14 @@ import java.util.ArrayList;
 public class DiskStoredArrayList<T> extends ArrayList<T> {
 
     private final int bufferSize;
-    private final String cacheFilePath;
+    private String cacheFilePath;
     private RandomAccessFile cacheFile, cacheIndexFile;
     private final ArrayList<MapEntry> mapEntries = new ArrayList<>();
     private final EntryCaches entryCaches = new EntryCaches();
+
+    public DiskStoredArrayList() {
+        bufferSize = 30;
+    }
 
     public DiskStoredArrayList(int bufferSize, String cacheFolderPath, String cacheFilePath, String cacheIndexFilePath) {
         this.bufferSize = bufferSize;
@@ -38,9 +42,34 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
         }
     }
 
+    public void loadList(String cacheFolderPath, String cacheFilePath, String cacheIndexFilePath) {
+        if (cacheFilePath != null) clearClose();
+        this.cacheFilePath = cacheFilePath;
+        final File cacheFolderFile = new File(cacheFolderPath);
+        if (!cacheFolderFile.exists()) cacheFolderFile.mkdirs();
+        try {
+            cacheFile = new RandomAccessFile(cacheFilePath, "rwd");
+            cacheIndexFile = new RandomAccessFile(cacheIndexFilePath, "rwd");
+            if (cacheIndexFile.length() > 0) {
+                final byte[] buf = new byte[(int) cacheIndexFile.length()];
+                cacheIndexFile.read(buf);
+                final ArrayList<MapEntry> mapEntryArrayList = (ArrayList<MapEntry>) ObjectHelper.convertFromBytes(buf, null);
+                if (mapEntryArrayList != null)
+                    mapEntries.addAll(mapEntryArrayList);
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
     @Override
     public int size() {
         return mapEntries.size();
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return mapEntries.isEmpty();
     }
 
     @Override
@@ -110,6 +139,7 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
     public ArrayList<T> subList(int fromIndex, int toIndex) {
         final ArrayList<T> result = new ArrayList<>();
         if (toIndex > mapEntries.size()) toIndex = mapEntries.size();
+        if (fromIndex < 0) fromIndex = 0;
         for (int i = fromIndex; i < toIndex; i++) {
             final T object = entryCaches.search(i);
             if (object != null) {
