@@ -187,6 +187,16 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
         return null;
     }
 
+    public void save() {
+        try {
+            cacheIndexFile.setLength(0);
+            cacheIndexFile.write(ObjectHelper.convertToBytes(mapEntries));
+            cacheIndexFile.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     @Override
     public void clear() {
         synchronized (this) {
