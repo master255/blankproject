@@ -4,8 +4,8 @@ import java.io.Serializable;
 
 public class MapEntry implements Serializable {
     private static final long serialVersionUID = 1;
-    private final long startByte;
-    private final int length;
+    private long startByte;
+    private int length;
 
     public MapEntry(long startByte, int length) {
         this.startByte = startByte;
@@ -18,5 +18,13 @@ public class MapEntry implements Serializable {
 
     public long getStartByte() {
         return startByte;
+    }
+
+    public void setStartByte(long startByte) {
+        this.startByte = startByte;
+    }
+
+    public void setLength(int length) {
+        this.length = length;
     }
 }

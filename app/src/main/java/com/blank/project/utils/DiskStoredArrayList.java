@@ -13,8 +13,8 @@ import java.util.ArrayList;
 public class DiskStoredArrayList<T> extends ArrayList<T> {
 
     private final int bufferSize;
-    private String cacheFilePath;
-    private RandomAccessFile cacheFile, cacheIndexFile;
+    private String cacheFilePath, cacheIndexFilePath;
+    private RandomAccessFile cacheFile;
     private final ArrayList<MapEntry> mapEntries = new ArrayList<>();
     private final EntryCaches entryCaches = new EntryCaches();
 
@@ -25,11 +25,12 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
     public DiskStoredArrayList(int bufferSize, String cacheFolderPath, String cacheFilePath, String cacheIndexFilePath) {
         this.bufferSize = bufferSize;
         this.cacheFilePath = cacheFilePath;
+        this.cacheIndexFilePath = cacheIndexFilePath;
         final File cacheFolderFile = new File(cacheFolderPath);
         if (!cacheFolderFile.exists()) cacheFolderFile.mkdirs();
         try {
             cacheFile = new RandomAccessFile(cacheFilePath, "rwd");
-            cacheIndexFile = new RandomAccessFile(cacheIndexFilePath, "rwd");
+            final RandomAccessFile cacheIndexFile = new RandomAccessFile(cacheIndexFilePath, "rwd");
             if (cacheIndexFile.length() > 0) {
                 final byte[] buf = new byte[(int) cacheIndexFile.length()];
                 cacheIndexFile.read(buf);
@@ -37,19 +38,21 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
                 if (mapEntryArrayList != null)
                     mapEntries.addAll(mapEntryArrayList);
             }
+            cacheIndexFile.close();
         } catch (Exception ex) {
             ex.printStackTrace();
         }
     }
 
     public void loadList(String cacheFolderPath, String cacheFilePath, String cacheIndexFilePath) {
-        if (cacheFilePath != null) clearClose();
+        if (cacheFilePath != null) freeResourcesClose();
         this.cacheFilePath = cacheFilePath;
+        this.cacheIndexFilePath = cacheIndexFilePath;
         final File cacheFolderFile = new File(cacheFolderPath);
         if (!cacheFolderFile.exists()) cacheFolderFile.mkdirs();
         try {
             cacheFile = new RandomAccessFile(cacheFilePath, "rwd");
-            cacheIndexFile = new RandomAccessFile(cacheIndexFilePath, "rwd");
+            final RandomAccessFile cacheIndexFile = new RandomAccessFile(cacheIndexFilePath, "rwd");
             if (cacheIndexFile.length() > 0) {
                 final byte[] buf = new byte[(int) cacheIndexFile.length()];
                 cacheIndexFile.read(buf);
@@ -57,6 +60,7 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
                 if (mapEntryArrayList != null)
                     mapEntries.addAll(mapEntryArrayList);
             }
+            cacheIndexFile.close();
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -181,44 +185,119 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
 
     @Override
     public T remove(int index) {
-        final MapEntry mapEntry = mapEntries.remove(index);
-        if (mapEntry == null) return null;
-        try {
-            cacheFile.close();
-            final File fileTmp = new File(cacheFilePath);
-            if (fileTmp.renameTo(new File(cacheFilePath + "t"))) {
-                cacheFile = new RandomAccessFile(cacheFilePath, "rwd");
-                final RandomAccessFile fileTmpData = new RandomAccessFile(fileTmp, "rwd");
-                final byte[] buf = new byte[Constants.FILE_BUFFER_LENGTH];
-                int bytesRead;
-                long allBytes = mapEntry.getStartByte();
-                while ((bytesRead = fileTmpData.read(buf)) != -1) {
-                    allBytes -= bytesRead;
-                    if (allBytes > 0)
-                        cacheFile.write(buf, 0, bytesRead);
-                    else if (allBytes == 0) {
-                        cacheFile.write(buf, 0, bytesRead);
-                        fileTmpData.skipBytes(mapEntry.getLength());
-                        while ((bytesRead = fileTmpData.read(buf)) != -1)
-                            cacheFile.write(buf, 0, bytesRead);
-                        break;
-                    } else {
-                        cacheFile.write(buf, 0, (int) (bytesRead + allBytes));
-                        fileTmpData.skipBytes(mapEntry.getLength());
-                        while ((bytesRead = fileTmpData.read(buf)) != -1)
-                            cacheFile.write(buf, 0, bytesRead);
-                        break;
-                    }
-                }
+        synchronized (this) {
+            entryCaches.removeUntil(index);
+            final MapEntry mapEntry = mapEntries.remove(index);
+            if (mapEntry == null) return null;
+            for (int i = index; i < mapEntries.size(); i++) {
+                final MapEntry mapEntryLocal = mapEntries.get(i);
+                mapEntryLocal.setStartByte(mapEntryLocal.getStartByte() - mapEntry.getLength());
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+            try {
+                cacheFile.close();
+                final File fileCache = new File(cacheFilePath);
+                final File fileTmp = new File(cacheFilePath + "t");
+                if (fileCache.renameTo(fileTmp)) {
+                    cacheFile = new RandomAccessFile(fileCache, "rwd");
+                    final RandomAccessFile fileTmpData = new RandomAccessFile(fileTmp, "rwd");
+                    final byte[] buf = new byte[Constants.FILE_BUFFER_LENGTH];
+                    int bytesRead;
+                    long allBytes = mapEntry.getStartByte();
+                    while ((bytesRead = fileTmpData.read(buf)) != -1) {
+                        allBytes -= bytesRead;
+                        if (allBytes > 0)
+                            cacheFile.write(buf, 0, bytesRead);
+                        else if (allBytes == 0) {
+                            cacheFile.write(buf, 0, bytesRead);
+                            fileTmpData.seek(mapEntry.getStartByte() + mapEntry.getLength());
+                            while ((bytesRead = fileTmpData.read(buf)) != -1)
+                                cacheFile.write(buf, 0, bytesRead);
+                            break;
+                        } else {
+                            cacheFile.write(buf, 0, (int) (bytesRead + allBytes));
+                            fileTmpData.seek(mapEntry.getStartByte() + mapEntry.getLength());
+                            while ((bytesRead = fileTmpData.read(buf)) != -1)
+                                cacheFile.write(buf, 0, bytesRead);
+                            break;
+                        }
+                    }
+                    fileTmpData.close();
+                    fileTmp.delete();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
         return null;
     }
 
-    public void save() {
+    public boolean replaceElement(int index, T t) {
+        synchronized (this) {
+            entryCaches.removeUntil(index);
+            final MapEntry mapEntry = mapEntries.get(index);
+            if (mapEntry == null) return false;
+            try {
+                cacheFile.close();
+                final File fileCache = new File(cacheFilePath);
+                final File fileTmp = new File(cacheFilePath + "t");
+                if (fileCache.renameTo(fileTmp)) {
+                    cacheFile = new RandomAccessFile(fileCache, "rwd");
+                    final RandomAccessFile fileTmpData = new RandomAccessFile(fileTmp, "rwd");
+                    final byte[] buf = new byte[Constants.FILE_BUFFER_LENGTH];
+                    int bytesRead;
+                    long allBytes = mapEntry.getStartByte();
+                    while ((bytesRead = fileTmpData.read(buf)) != -1) {
+                        allBytes -= bytesRead;
+                        if (allBytes > 0)
+                            cacheFile.write(buf, 0, bytesRead);
+                        else if (allBytes == 0) {
+                            cacheFile.write(buf, 0, bytesRead);
+                            final byte[] bytes = ObjectHelper.convertToBytes((Serializable) t);
+                            cacheFile.write(bytes);
+                            mapEntry.setLength(bytes.length);
+                            long filePosition = mapEntry.getStartByte() + mapEntry.getLength();
+                            for (int i = index + 1; i < mapEntries.size(); i++) {
+                                final MapEntry mapEntryLocal = mapEntries.get(i);
+                                mapEntryLocal.setStartByte(filePosition);
+                                filePosition = filePosition + mapEntryLocal.getLength();
+                            }
+                            fileTmpData.seek(mapEntry.getStartByte() + mapEntry.getLength());
+                            while ((bytesRead = fileTmpData.read(buf)) != -1)
+                                cacheFile.write(buf, 0, bytesRead);
+                            break;
+                        } else {
+                            cacheFile.write(buf, 0, (int) (bytesRead + allBytes));
+                            final byte[] bytes = ObjectHelper.convertToBytes((Serializable) t);
+                            cacheFile.write(bytes);
+                            mapEntry.setLength(bytes.length);
+                            long filePosition = mapEntry.getStartByte() + mapEntry.getLength();
+                            for (int i = index + 1; i < mapEntries.size(); i++) {
+                                final MapEntry mapEntryLocal = mapEntries.get(i);
+                                mapEntryLocal.setStartByte(filePosition);
+                                filePosition = filePosition + mapEntryLocal.getLength();
+                            }
+                            fileTmpData.seek(mapEntry.getStartByte() + mapEntry.getLength());
+                            while ((bytesRead = fileTmpData.read(buf)) != -1)
+                                cacheFile.write(buf, 0, bytesRead);
+                            break;
+                        }
+                    }
+                    fileTmpData.close();
+                    fileTmp.delete();
+                    entryCaches.add(new EntryCache(index, t));
+                    if (entryCaches.size() > bufferSize) entryCaches.remove(0);
+                }
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                return false;
+            }
+            return true;
+        }
+    }
+
+    public void saveIndex() {
         try {
+            final RandomAccessFile cacheIndexFile = new RandomAccessFile(cacheIndexFilePath, "rwd");
             cacheIndexFile.setLength(0);
             cacheIndexFile.write(ObjectHelper.convertToBytes(mapEntries));
             cacheIndexFile.close();
@@ -233,7 +312,9 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
             mapEntries.clear();
             try {
                 cacheFile.setLength(0);
+                final RandomAccessFile cacheIndexFile = new RandomAccessFile(cacheIndexFilePath, "rwd");
                 cacheIndexFile.setLength(0);
+                cacheIndexFile.close();
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -243,6 +324,7 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
     public void close() {
         try {
             cacheFile.close();
+            final RandomAccessFile cacheIndexFile = new RandomAccessFile(cacheIndexFilePath, "rwd");
             cacheIndexFile.setLength(0);
             cacheIndexFile.write(ObjectHelper.convertToBytes(mapEntries));
             cacheIndexFile.close();
@@ -251,17 +333,20 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
         }
     }
 
-    public void clearClose() {
+    public void freeResourcesClose() {
         synchronized (this) {
             mapEntries.clear();
             entryCaches.clear();
             try {
                 cacheFile.close();
-                cacheIndexFile.close();
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
+    }
+
+    public boolean isEmptyArrayList() {
+        return super.isEmpty();
     }
 
     public int sizeArrayList() {
@@ -284,6 +369,13 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
                     return entryCache.getEntry();
             }
             return null;
+        }
+
+        public void removeUntil(int index) {
+            for (int i = size() - 1; i > -1; i--) {
+                if (get(i).getIndex() >= index)
+                    remove(i);
+            }
         }
     }
 
