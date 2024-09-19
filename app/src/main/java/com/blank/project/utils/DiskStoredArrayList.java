@@ -121,8 +121,8 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
         final T object = entryCaches.search(index);
         if (object != null) return object;
         synchronized (this) {
-            final MapEntry mapEntry = mapEntries.get(index);
             try {
+                final MapEntry mapEntry = mapEntries.get(index);
                 cacheFile.seek(mapEntry.getStartByte());
                 final byte[] buf = new byte[mapEntry.getLength()];
                 cacheFile.read(buf);
