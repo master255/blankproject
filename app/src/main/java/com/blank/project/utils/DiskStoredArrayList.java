@@ -45,7 +45,7 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
     }
 
     public void loadList(String cacheFolderPath, String cacheFilePath, String cacheIndexFilePath) {
-        if (cacheFilePath != null) freeResourcesClose();
+        if (cacheFilePath != null && cacheFile != null) freeResourcesClose();
         this.cacheFilePath = cacheFilePath;
         this.cacheIndexFilePath = cacheIndexFilePath;
         final File cacheFolderFile = new File(cacheFolderPath);
