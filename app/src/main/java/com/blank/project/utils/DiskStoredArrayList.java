@@ -310,6 +310,7 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
     public void clear() {
         synchronized (this) {
             mapEntries.clear();
+            entryCaches.clear();
             try {
                 cacheFile.setLength(0);
                 final RandomAccessFile cacheIndexFile = new RandomAccessFile(cacheIndexFilePath, "rwd");
@@ -321,7 +322,22 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
         }
     }
 
+    public void clearClose() {
+        mapEntries.clear();
+        entryCaches.clear();
+        try {
+            cacheFile.setLength(0);
+            cacheFile.close();
+            final RandomAccessFile cacheIndexFile = new RandomAccessFile(cacheIndexFilePath, "rwd");
+            cacheIndexFile.setLength(0);
+            cacheIndexFile.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     public void close() {
+        entryCaches.clear();
         try {
             cacheFile.close();
             final RandomAccessFile cacheIndexFile = new RandomAccessFile(cacheIndexFilePath, "rwd");
