@@ -80,7 +80,13 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
     public boolean add(T t) {
         synchronized (this) {
             try {
-                final long length = cacheFile.length();
+                final long length;
+                if (mapEntries.isEmpty())
+                    length = 0;
+                else {
+                    final MapEntry lastMapEntry = mapEntries.get(mapEntries.size() - 1);
+                    length = lastMapEntry.getStartByte() + lastMapEntry.getLength();
+                }
                 final byte[] bytes = ObjectHelper.convertToBytes((Serializable) t);
                 cacheFile.seek(length);
                 cacheFile.write(bytes);
@@ -100,7 +106,13 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
             for (int i = 0; i < c.size(); i++) {
                 final T element = c.get(i);
                 try {
-                    final long length = cacheFile.length();
+                    final long length;
+                    if (mapEntries.isEmpty())
+                        length = 0;
+                    else {
+                        final MapEntry lastMapEntry = mapEntries.get(mapEntries.size() - 1);
+                        length = lastMapEntry.getStartByte() + lastMapEntry.getLength();
+                    }
                     final byte[] bytes = ObjectHelper.convertToBytes((Serializable) element);
                     cacheFile.seek(length);
                     cacheFile.write(bytes);
@@ -130,6 +142,12 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
                 if (entry != null) {
                     entryCaches.add(new EntryCache(index, entry));
                     if (entryCaches.size() > bufferSize) entryCaches.remove(0);
+                } else {
+                    for (int i = index; i < mapEntries.size(); i++) {
+                        mapEntries.remove(i);
+                        i--;
+                    }
+                    saveIndex();
                 }
                 return entry;
             } catch (Exception e) {
@@ -254,6 +272,9 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
                             cacheFile.write(buf, 0, bytesRead);
                             final byte[] bytes = ObjectHelper.convertToBytes((Serializable) t);
                             cacheFile.write(bytes);
+                            fileTmpData.seek(mapEntry.getStartByte() + mapEntry.getLength());
+                            while ((bytesRead = fileTmpData.read(buf)) != -1)
+                                cacheFile.write(buf, 0, bytesRead);
                             mapEntry.setLength(bytes.length);
                             long filePosition = mapEntry.getStartByte() + mapEntry.getLength();
                             for (int i = index + 1; i < mapEntries.size(); i++) {
@@ -261,14 +282,14 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
                                 mapEntryLocal.setStartByte(filePosition);
                                 filePosition = filePosition + mapEntryLocal.getLength();
                             }
-                            fileTmpData.seek(mapEntry.getStartByte() + mapEntry.getLength());
-                            while ((bytesRead = fileTmpData.read(buf)) != -1)
-                                cacheFile.write(buf, 0, bytesRead);
                             break;
                         } else {
                             cacheFile.write(buf, 0, (int) (bytesRead + allBytes));
                             final byte[] bytes = ObjectHelper.convertToBytes((Serializable) t);
                             cacheFile.write(bytes);
+                            fileTmpData.seek(mapEntry.getStartByte() + mapEntry.getLength());
+                            while ((bytesRead = fileTmpData.read(buf)) != -1)
+                                cacheFile.write(buf, 0, bytesRead);
                             mapEntry.setLength(bytes.length);
                             long filePosition = mapEntry.getStartByte() + mapEntry.getLength();
                             for (int i = index + 1; i < mapEntries.size(); i++) {
@@ -276,9 +297,6 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
                                 mapEntryLocal.setStartByte(filePosition);
                                 filePosition = filePosition + mapEntryLocal.getLength();
                             }
-                            fileTmpData.seek(mapEntry.getStartByte() + mapEntry.getLength());
-                            while ((bytesRead = fileTmpData.read(buf)) != -1)
-                                cacheFile.write(buf, 0, bytesRead);
                             break;
                         }
                     }
