@@ -21,6 +21,8 @@
 #-renamesourcefileattribute SourceFile
 -keep public class * extends java.lang.Exception
 -keep class com.blank.project.utils.DiskStoredArrayList { *; }
+-keep class com.blank.project.utils.DiskStoredSortedArrayList { *; }
+-keep class com.blank.project.utils.DiskStoredSortedArrayList$MapEntries{ *; }
 -assumenosideeffects class android.util.Log {
     public static boolean isLoggable(java.lang.String, int);
     public static int v(...);
