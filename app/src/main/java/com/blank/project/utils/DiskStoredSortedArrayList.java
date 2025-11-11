@@ -315,7 +315,7 @@ public class DiskStoredSortedArrayList<T> extends ArrayList<T> {
 
     public boolean replaceElement(int id, T t) {
         synchronized (this) {
-            entryCaches.removeUntil(id);
+            entryCaches.replaceElement(id, t);
             final MapEntrySorted mapEntrySorted = mapEntries.getById(id);
             if (mapEntrySorted == null) return false;
             final int index = mapEntries.indexOf(mapEntrySorted);
@@ -521,16 +521,6 @@ public class DiskStoredSortedArrayList<T> extends ArrayList<T> {
             }
         }
 
-        public void removeById(int id) {
-            for (int i = 0; i < size(); i++) {
-                final EntryCache entryCache = get(i);
-                if (entryCache.getId() == id) {
-                    entryCaches.remove(i);
-                    return;
-                }
-            }
-        }
-
         public EntryCache getById(int id) {
             for (int i = size() - 1; i > -1; i--) {
                 final EntryCache entryCache = get(i);
@@ -539,11 +529,21 @@ public class DiskStoredSortedArrayList<T> extends ArrayList<T> {
             }
             return null;
         }
+
+        public void replaceElement(int id, T t) {
+            for (int i = size() - 1; i > -1; i--) {
+                final EntryCache entryCache = get(i);
+                if (entryCache.getId() == id) {
+                    entryCache.setEntry(t);
+                    return;
+                }
+            }
+        }
     }
 
     private class EntryCache {
         private int id;
-        private final T entry;
+        private T entry;
 
         public EntryCache(int id, T entry) {
             this.id = id;
@@ -560,6 +560,10 @@ public class DiskStoredSortedArrayList<T> extends ArrayList<T> {
 
         public T getEntry() {
             return entry;
+        }
+
+        public void setEntry(T entry) {
+            this.entry = entry;
         }
     }
 

@@ -251,7 +251,7 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
 
     public boolean replaceElement(int index, T t) {
         synchronized (this) {
-            entryCaches.removeUntil(index);
+            entryCaches.replaceElement(index, t);
             final MapEntry mapEntry = mapEntries.get(index);
             if (mapEntry == null) return false;
             try {
@@ -411,11 +411,21 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
                     remove(i);
             }
         }
+
+        public void replaceElement(int index, T t) {
+            for (int i = size() - 1; i > -1; i--) {
+                final EntryCache entryCache = get(i);
+                if (entryCache.getIndex() == index) {
+                    entryCache.setEntry(t);
+                    return;
+                }
+            }
+        }
     }
 
     class EntryCache {
         private final int index;
-        private final T entry;
+        private T entry;
 
         public EntryCache(int index, T entry) {
             this.index = index;
@@ -424,6 +434,10 @@ public class DiskStoredArrayList<T> extends ArrayList<T> {
 
         public int getIndex() {
             return index;
+        }
+
+        public void setEntry(T entry) {
+            this.entry = entry;
         }
 
         public T getEntry() {
