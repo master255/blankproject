@@ -382,7 +382,7 @@ public class DiskStoredSortedArrayList<T> extends ArrayList<T> {
         synchronized (this) {
             final EntryCache entryCache = entryCaches.getById(id);
             entryCache.setId(-1);
-            for (int i = 0; i < id; i++) {
+            for (int i = id - 1; i > -1; i--) {
                 final EntryCache entryCacheLocal = entryCaches.getById(i);
                 if (entryCacheLocal != null)
                     entryCacheLocal.setId(entryCacheLocal.getId() + 1);
@@ -390,7 +390,7 @@ public class DiskStoredSortedArrayList<T> extends ArrayList<T> {
             entryCache.setId(0);
             final MapEntrySorted mapEntrySorted = mapEntries.getById(id);
             mapEntrySorted.setId(-1);
-            for (int i = 0; i < id; i++) {
+            for (int i = id - 1; i > -1; i--) {
                 final MapEntrySorted mapEntrySortedLocal = mapEntries.getById(i);
                 mapEntrySortedLocal.setId(mapEntrySortedLocal.getId() + 1);
             }
