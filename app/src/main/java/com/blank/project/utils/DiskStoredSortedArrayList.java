@@ -367,8 +367,6 @@ public class DiskStoredSortedArrayList<T> extends ArrayList<T> {
                     }
                     fileTmpData.close();
                     fileTmp.delete();
-                    entryCaches.add(new EntryCache(id, t));
-                    if (entryCaches.size() > bufferSize) entryCaches.remove(0);
                 }
             } catch (Exception ex) {
                 ex.printStackTrace();
